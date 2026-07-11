@@ -137,13 +137,13 @@
             color: #475569; 
             margin-left: 4px; 
         }
-        .status-badge {
-            font-size: 12px;
-            font-weight: 600;
-            padding: 4px 8px;
-            border-radius: 6px;
-            background: #f1f5f9;
-            width: fit-content;
+        .status-badge { 
+            font-size: 12px; 
+            font-weight: 600; 
+            padding: 4px 8px; 
+            border-radius: 6px; 
+            background: #f1f5f9; 
+            width: fit-content; 
         }
         .status-badge.active-red { color: #ef4444; background: #fee2e2; }
         .status-badge.inactive { color: #64748b; background: #f1f5f9; }
@@ -198,6 +198,10 @@
             border-radius: 6px;
             font-weight: 700;
             cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-main:hover {
+            background: #0f172a;
         }
         .btn-danger-toggle {
             width: 100%;
@@ -280,7 +284,7 @@
 
         .progress-container { width: 100%; }
         .progress-bar-bg { background: #e2e8f0; height: 8px; border-radius: 4px; width: 100%; margin-top: 6px; }
-        .progress-bar-fill { background: #10b981; height: 100%; width: 5%; border-radius: 4px; }
+        .progress-bar-fill { background: #10b981; height: 100%; width: 0%; border-radius: 4px; transition: width 0.5s ease; }
 
         .scada-footer {
             text-align: center;
@@ -338,13 +342,13 @@
         <div class="controls-grid">
             <div class="control-card">
                 <div class="control-card-title">| Quy trình sinh học & tiến độ</div>
-                <div style="font-size: 13px; color: #64748b;">Vào lò: <span id="txtThoiGianVaoLo">9/7/2026 14:04:25</span></div>
+                <div style="font-size: 13px; color: #64748b;">Vào lò: <span id="txtThoiGianVaoLo">Chưa bắt đầu mẻ ấp</span></div>
                 <div class="progress-container">
                     <div style="font-size: 18px; font-weight: 700; color: #10b981;" id="txtTiendoNgay">Tiến độ: 0 / 21 ngày</div>
                     <div class="progress-bar-bg"><div class="progress-bar-fill" id="barTienDo"></div></div>
                 </div>
                 <div style="font-size: 13px; font-weight: 600; color: #ef4444;">Còn lại: <span id="txtNgayConLai">21</span> ngày trứng nở</div>
-                <button class="btn-main" style="margin-top: auto;">BẮT ĐẦU MẺ ẤP MỚI</button>
+                <button class="btn-main" id="btnVaoLoMoi" onclick="batDauMeApMoi()" style="margin-top: auto;">BẮT ĐẦU MẺ ẤP MỚI</button>
             </div>
 
             <div class="control-card">
@@ -383,6 +387,10 @@
                         <div class="param-input-group">
                             <label>Quạt Tắt (°C)</label>
                             <input type="number" step="0.1" id="inpTempQuatTat" class="param-input">
+                        </div>
+                        <div class="param-input-group" style="grid-column: span 2;">
+                            <label>Tổng Số Ngày Cần Ấp (Ngày)</label>
+                            <input type="number" min="1" max="100" id="inpSoNgayAp" class="param-input" style="text-align: left; padding-left: 12px;">
                         </div>
                     </div>
                     <button class="btn-success" onclick="apDungThongSo()">ÁP DỤNG CẤU HÌNH</button>
@@ -537,7 +545,36 @@
             document.getElementById("btnTrungCut").className = loaiTrung === "CHIM_CUT" ? "btn active" : "btn";
             document.getElementById("btnTuCai").className = loaiTrung === "TU_CHINH" ? "btn active" : "btn";
 
-            // ĐỒNG BỘ HIỂN THỊ CỦA BẢNG TỰ CÀI (CHỈ KHI NGƯỜI DÙNG KHÔNG CON TẬP TRUNG CONSOLE VÀO Ô ĐÓ)
+            const tongSoNgayAp = data.TongSoNgayAp || 21;
+
+            if (data.ThoiGianVaoLo) {
+                const vaoLoDate = new Date(data.ThoiGianVaoLo);
+                document.getElementById("txtThoiGianVaoLo").innerText = vaoLoDate.toLocaleString('vi-VN');
+                
+                const nowTs = new Date().getTime();
+                let ngayHienTai = Math.floor((nowTs - data.ThoiGianVaoLo) / 86400000);
+                if (ngayHienTai < 0) ngayHienTai = 0;
+                if (ngayHienTai > tongSoNgayAp) ngayHienTai = tongSoNgayAp;
+                
+                let ngayConLai = tongSoNgayAp - ngayHienTai;
+                
+                document.getElementById("txtTiendoNgay").innerText = `Tiến độ: ${ngayHienTai} / ${tongSoNgayAp} ngày`;
+                document.getElementById("txtNgayConLai").innerText = ngayConLai;
+                
+                const phanTramFill = (ngayHienTai / tongSoNgayAp) * 100;
+                document.getElementById("barTienDo").style.width = `${phanTramFill}%`;
+                
+                if (ngayConLai <= 3 && data.DaoTrung !== false && currentCheDo === "TUDONG") {
+                    db.update({ DaoTrung: false });
+                    alert(`⚠️ CẢNH BÁO SINH HỌC: Đã bước vào 3 ngày cuối mẻ ấp (Ngày thứ ${ngayHienTai}). Hệ thống tự động KHÓA CHẶT hành trình lật khay Servo để bảo vệ túi khí non!`);
+                }
+            } else {
+                document.getElementById("txtThoiGianVaoLo").innerText = "Chưa bắt đầu mẻ ấp";
+                document.getElementById("txtTiendoNgay").innerText = `Tiến độ: 0 / ${tongSoNgayAp} ngày`;
+                document.getElementById("txtNgayConLai").innerText = tongSoNgayAp;
+                document.getElementById("barTienDo").style.width = "0%";
+            }
+
             if (loaiTrung === "TU_CHINH") {
                 document.getElementById("panelTuCai").style.display = "flex";
                 if (data.NuongTuChinh) {
@@ -545,6 +582,7 @@
                     if (document.activeElement !== document.getElementById("inpTempSuoiTat")) document.getElementById("inpTempSuoiTat").value = data.NuongTuChinh.tempSuoiTat || 37.5;
                     if (document.activeElement !== document.getElementById("inpTempQuatBat")) document.getElementById("inpTempQuatBat").value = data.NuongTuChinh.tempQuatBat || 37.8;
                     if (document.activeElement !== document.getElementById("inpTempQuatTat")) document.getElementById("inpTempQuatTat").value = data.NuongTuChinh.tempQuatTat || 37.4;
+                    if (document.activeElement !== document.getElementById("inpSoNgayAp")) document.getElementById("inpSoNgayAp").value = data.NuongTuChinh.soNgayAp || 21;
                 }
             } else {
                 document.getElementById("panelTuCai").style.display = "none";
@@ -609,14 +647,13 @@
             db.update({ LoaiTrung: loai });
         }
 
-        // HÀM MỚI: GOM TẤT CẢ THÔNG SỐ VÀ BẮN ĐỒNG LOẠT KHI NHẤN NÚT ÁP DỤNG
         function apDungThongSo() {
             const tSuoiBat = parseFloat(document.getElementById("inpTempSuoiBat").value);
             const tSuoiTat = parseFloat(document.getElementById("inpTempSuoiTat").value);
             const tQuatBat = parseFloat(document.getElementById("inpTempQuatBat").value);
             const tQuatTat = parseFloat(document.getElementById("inpTempQuatTat").value);
+            const soNgayAp = parseInt(document.getElementById("inpSoNgayAp").value);
 
-            // Kiểm tra tính logic đầu vào tránh lỗi phần cứng
             if (tSuoiBat >= tSuoiTat) {
                 alert("Lỗi: Nhiệt độ Sưởi Bật phải nhỏ hơn Nhiệt độ Sưởi Tắt!");
                 return;
@@ -625,18 +662,34 @@
                 alert("Lỗi: Nhiệt độ Quạt Tắt phải nhỏ hơn Nhiệt độ Quạt Bật!");
                 return;
             }
+            if (isNaN(soNgayAp) || soNgayAp <= 0) {
+                alert("Lỗi: Tổng số ngày cần ấp phải là số nguyên lớn hơn 0!");
+                return;
+            }
 
-            // Gửi duy nhất 1 gói JSON đồng loạt lên mạng
             db.update({
                 "NuongTuChinh/tempSuoiBat": tSuoiBat,
                 "NuongTuChinh/tempSuoiTat": tSuoiTat,
                 "NuongTuChinh/tempQuatBat": tQuatBat,
-                "NuongTuChinh/tempQuatTat": tQuatTat
+                "NuongTuChinh/tempQuatTat": tQuatTat,
+                "NuongTuChinh/soNgayAp": soNgayAp
             }).then(() => {
                 alert("Áp dụng cấu hình thông số tự cài thành công!");
             }).catch((error) => {
                 console.error("Lỗi gửi dữ liệu: ", error);
             });
+        }
+
+        function batDauMeApMoi() {
+            if (confirm("Hải có chắc chắn muốn XÓA MỐC CŨ để khởi tạo BẮT ĐẦU MẺ ẤP MỚI ngay bây giờ không?")) {
+                const currentTimestamp = new Date().getTime();
+                db.update({
+                    ThoiGianVaoLo: currentTimestamp,
+                    DaoTrung: true
+                }).then(() => {
+                    alert("Khởi tạo mẻ ấp mới thành công! Hệ thống bắt đầu tính thời gian.");
+                });
+            }
         }
 
         function toggleWebSuoi() {
